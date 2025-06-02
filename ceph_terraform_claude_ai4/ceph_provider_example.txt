@@ -1,0 +1,110 @@
+# Example Terraform configuration using the Ceph provider
+
+terraform {
+  required_providers {
+    ceph = {
+      source = "local/ceph/ceph"
+      version = "0.1.0"
+    }
+  }
+}
+
+# Configure the Ceph provider
+provider "ceph" {
+  config_file = "/etc/ceph/ceph.conf"
+  keyring     = "/etc/ceph/ceph.client.admin.keyring"
+  user        = "admin"
+}
+
+# Get cluster status
+data "ceph_cluster_status" "cluster" {}
+
+# Create a pool
+resource "ceph_pool" "rbd_pool" {
+  name    = "rbd"
+  pg_num  = 128
+  pgp_num = 128
+  size    = 3
+  min_size = 2
+  type    = "replicated"
+}
+
+# Create another pool with different settings
+resource "ceph_pool" "cephfs_data" {
+  name    = "cephfs_data"
+  pg_num  = 64
+  pgp_num = 64
+  size    = 3
+  min_size = 1
+  type    = "replicated"
+}
+
+# Create a user with specific capabilities
+resource "ceph_user" "client_rbd" {
+  name = "client.rbd"
+  caps = {
+    mon = "profile rbd"
+    osd = "profile rbd pool=rbd"
+  }
+}
+
+# Create a user for CephFS
+resource "ceph_user" "client_cephfs" {
+  name = "client.cephfs"
+  caps = {
+    mon = "allow r"
+    osd = "allow rw pool=cephfs_data"
+    mds = "allow rw"
+  }
+}
+
+# Create RBD images
+resource "ceph_block_image" "vm_disk" {
+  name = "vm-disk-001"
+  pool = ceph_pool.rbd_pool.name
+  size = "10G"
+  features = ["layering", "exclusive-lock", "object-map", "fast-diff"]
+}
+
+resource "ceph_block_image" "backup_disk" {
+  name = "backup-disk-001"
+  pool = ceph_pool.rbd_pool.name
+  size = "100G"
+  features = ["layering"]
+}
+
+# Get information about an existing pool
+data "ceph_pool" "existing_pool" {
+  name = "rbd"
+  depends_on = [ceph_pool.rbd_pool]
+}
+
+# Output cluster information
+output "cluster_health" {
+  value = data.ceph_cluster_status.cluster.health
+}
+
+output "cluster_info" {
+  value = {
+    health     = data.ceph_cluster_status.cluster.health
+    osd_count  = data.ceph_cluster_status.cluster.osd_count
+    mon_count  = data.ceph_cluster_status.cluster.mon_count
+    mgr_count  = data.ceph_cluster_status.cluster.mgr_count
+    pool_count = data.ceph_cluster_status.cluster.pool_count
+  }
+}
+
+output "rbd_user_key" {
+  value = ceph_user.client_rbd.key
+  sensitive = true
+}
+
+output "pool_info" {
+  value = {
+    name     = data.ceph_pool.existing_pool.name
+    pg_num   = data.ceph_pool.existing_pool.pg_num
+    size     = data.ceph_pool.existing_pool.size
+    min_size = data.ceph_pool.existing_pool.min_size
+    type     = data.ceph_pool.existing_pool.type
+  }
+}
