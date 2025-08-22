@@ -1,6 +1,8 @@
 # Terraform Provider for Ceph
 
 This Terraform provider allows you to manage Ceph cluster resources including pools, users, and RBD block images.
+Please note that this is under development, to be considered experimental, and in no way are you assumed to be a sane person if you use this code in its current state.
+This project is a collaboration between Mike Burkhart and Chris Williams, as an attempt to vibecode a TF provider into existence that has some functionality.
 
 ## Features
 
